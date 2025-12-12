@@ -35,6 +35,9 @@ class MyHandler(BaseHTTPRequestHandler):
         """レスポンスヘッダー (ステータスコード + JSON + UTF-8) をセットする共通処理"""
         self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type")
         self.end_headers()
 
     def do_GET(self):
@@ -88,6 +91,10 @@ class MyHandler(BaseHTTPRequestHandler):
             self._set_headers(404)
             self.wfile.write(json.dumps(
                 {"error": "Not Found"}).encode("utf-8"))
+
+    def do_OPTIONS(self):
+        """CORS プリフライトリクエストに対応"""
+        self._set_headers()
 
 
 def run(server_class=HTTPServer, handler_class=MyHandler, port=8000):
