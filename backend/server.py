@@ -1,6 +1,8 @@
 from http.server import HTTPServer, BaseHTTPRequestHandler
 import json
-from urllib.parse import urlparse, parse_qs
+from urllib.parse import urlparse
+
+import uuid
 
 DATA_FILE = "records.json"
 
@@ -35,21 +37,52 @@ class MyHandler(BaseHTTPRequestHandler):
         """レスポンスヘッダー (ステータスコード + JSON + UTF-8) をセットする共通処理"""
         self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
+        # React からアクセスできるように CORS を許可
         self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        self.send_header("Access-Control-Allow-Methods",
+                         "GET, POST, PUT, DELETE, OPTIONS")
         self.send_header("Access-Control-Allow-Headers", "Content-Type")
         self.end_headers()
 
+    def do_OPTIONS(self):
+        """CORS プリフライトリクエストに対応"""
+        self._set_headers()
+
     def do_GET(self):
         """
-        GET /records を処理 — 全レコードを返す
+        GET /records — 全レコードを返す
+        GET /records/total - 合計金額を返す
+        GET /records/summary - カテゴリ別集計を返す
         """
         parsed = urlparse(self.path)
+
+        # 全レコード取得
         if parsed.path == "/records":
             records = load_records()
             self._set_headers(200)
             self.wfile.write(json.dumps(
                 records, ensure_ascii=False).encode("utf-8"))
+            return
+
+        # 合計金額取得
+        if parsed.path == "/records/total":
+            records = load_records()
+            total = sum(r["amount"] for r in records)
+            self._set_headers(200)
+            self.wfile.write(json.dumps({"total": total}).encode("utf-8"))
+            return
+
+        # カテゴリ別集計
+        if parsed.path == "/records/summary":
+            records = load_records()
+            cat_sum = {}
+            for r in records:
+                cat = r["category"]
+                cat_sum[cat] = cat_sum.get(cat, 0) + r["amount"]
+            self._set_headers(200)
+            self.wfile.write(json.dumps(cat_sum).encode("utf-8"))
+            return
+
         else:
             # 未定義のパス → 404
             self._set_headers(404)
@@ -81,6 +114,9 @@ class MyHandler(BaseHTTPRequestHandler):
                     {"error": "missing fields"}).encode("utf-8"))
                 return
 
+            # ランダムな一意 ID を付与
+            data["id"] = str(uuid.uuid4())
+
             records = load_records()
             records.append(data)
             save_records(records)
@@ -92,9 +128,60 @@ class MyHandler(BaseHTTPRequestHandler):
             self.wfile.write(json.dumps(
                 {"error": "Not Found"}).encode("utf-8"))
 
-    def do_OPTIONS(self):
-        """CORS プリフライトリクエストに対応"""
-        self._set_headers()
+    def do_PUT(self):
+        """
+        PUT /records{id} を処理 — 指定 ID のデータを編集
+        """
+        parsed = urlparse(self.path)
+        # 正しいルートか確認
+        if parsed.path.startswith("/records/"):
+            record_id = parsed.path.split("/")[-1]
+            content_length = int(self.headers.get("Content-Length", 0))
+            body = self.rfile.read(content_length).decode("utf-8")
+
+            try:
+                data = json.loads(body)
+            except json.JSONDecodeError:
+                self._set_headers(400)
+                self.wfile.write(json.dumps(
+                    {"error": "Invalid JSON"}).encode("utf-8")
+                )
+                return
+
+            records = load_records()
+            for r in records:
+                if r.get("id") == record_id:
+                    # 編集したい項目だけ更新
+                    r.update(data)  # 値を上書き
+                    save_records(records)
+                    self._set_headers(200)
+                    self.wfile.write(json.dumps(r).encode("utf-8"))
+                    return
+
+        else:
+            # 指定 ID のレコードが見つからなかった場合
+            self._set_headers(404)
+            self.wfile.write(json.dumps(
+                {"error": "Not Found"}).encode("utf-8"))
+
+    def do_DELETE(self):
+        """
+        DELETE /records/{id} を処理 — 指定された ID のレコードを削除
+        """
+        parsed = urlparse(self.path)
+        if parsed.path.startswith("/records/"):
+            record_id = parsed.path.split("/")[-1]
+            records = load_records()
+            new_records = [r for r in records if r["id"] != record_id]
+            save_records(new_records)
+            self._set_headers(200)
+            self.wfile.write(json.dumps(
+                {"deleted": record_id}).encode("utf-8"))
+        else:
+            self._set_headers(404)
+            self.wfile.write(json.dumps(
+                {"error": "Not Found"}).encode("utf-8")
+            )
 
 
 def run(server_class=HTTPServer, handler_class=MyHandler, port=8000):
