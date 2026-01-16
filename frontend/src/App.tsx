@@ -55,19 +55,19 @@ function App() {
         <form onSubmit={handleSubmit}>
           <div>
             <label>日付：</label>
-            <input type="date" value={date} onChange={(e) => setDate(e.target.value)}
+            <input id="date" type="date" value={date} onChange={(e) => setDate(e.target.value)}
             />
           </div>
 
           <div>
             <label>カテゴリ：</label>
-            <input type="text" value={category} onChange={(e) => setCategory(e.target.value)}
+            <input id="category" type="text" value={category} onChange={(e) => setCategory(e.target.value)}
             />
           </div>
 
           <div>
             <label>金額：</label>
-            <input type="text" value={amount} onChange={(e) => setAmount(parseInt(e.target.value, 10))}
+            <input id="amount" type="text" value={amount} onChange={(e) => setAmount(parseInt(e.target.value, 10))}
             />
           </div>
 
@@ -87,4 +87,4 @@ function App() {
   )
 }
 
-export default App
+export default App;
