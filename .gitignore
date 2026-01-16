@@ -8,6 +8,8 @@ npm-debug.log
 yarn-error.log
 dist/
 build/
+package-lock.json
+frontend/.vite
 
 # Python
 __pycache__
