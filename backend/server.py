@@ -87,7 +87,7 @@ class MyHandler(BaseHTTPRequestHandler):
             # 未定義のパス → 404
             self._set_headers(404)
             self.wfile.write(json.dumps(
-                {"eeror": "Not Found"}).encode("utf-8"))
+                {"error": "Not Found"}).encode("utf-8"))
 
     def do_POST(self):
         """
@@ -172,7 +172,13 @@ class MyHandler(BaseHTTPRequestHandler):
         if parsed.path.startswith("/records/"):
             record_id = parsed.path.split("/")[-1]
             records = load_records()
-            new_records = [r for r in records if r["id"] != record_id]
+            # id が存在し、かつ一致しないものだけ残す（削除）
+            new_records = [r for r in records if r.get("id") != record_id]
+
+            if len(records) == len(new_records):
+                self._send_json({"error": "ID not found"}, 404)
+                return
+
             save_records(new_records)
             self._set_headers(200)
             self.wfile.write(json.dumps(
